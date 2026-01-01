@@ -1,0 +1,588 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>PRINT - Facturación Publicidad</title>
+
+<!-- Librerías -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --card:#111827;
+  --text:#e5e7eb;
+  --base:#38bdf8;  /* azul */
+  --comp:#f59e0b;  /* amarillo */
+  --neg:#f87171;   /* rojo */
+  --diffColor:#6ee7b7; /* verde claro para bloque central */
+  --totalBg:#1e40af;
+
+  /* colores de select */
+  --revistaBg:#fef3c7; 
+  --productoBg:#dbeafe; 
+  --sectorBg:#fbcfe8;
+  --comercialBg:#d1fae5; 
+  --areaBg:#fcd5ce; 
+}
+body{
+  margin:0;
+  font-family:Inter,Arial,sans-serif;
+  background:linear-gradient(180deg,#020617,#0f172a);
+  color:var(--text);
+}
+h1{ text-align:center; margin:20px 0; }
+.container{ max-width:1500px; margin:auto; padding:20px; }
+.card{
+  background:rgba(17,24,39,.9);
+  border-radius:14px;
+  padding:18px;
+  margin-bottom:20px;
+}
+.filters select,input[type=file]{
+  background:#1f2933;
+  color:var(--text);
+  border:1px solid #1f2937;
+  padding:8px 10px;
+  border-radius:8px;
+  margin-right:14px;
+}
+.filters label{ font-weight:600; margin-right:6px; display:block; margin-top:10px; }
+
+.filtersRow{
+  display:flex;
+  gap:20px;
+  flex-wrap:wrap;
+  align-items:flex-start;
+}
+.filtersRow div select{
+  width:220px; 
+  font-weight:600;
+}
+
+/* colores de cada select */
+#fSite{ background:var(--revistaBg); color:#111; }
+#fProduct{ background:var(--productoBg); color:#111; }
+#fSector{ background:var(--sectorBg); color:#111; }
+#fComercial{ background:var(--comercialBg); color:#111; }
+#fArea{ background:var(--areaBg); color:#111; }
+
+.checkboxGroup{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:5px;
+}
+.checkboxGroup label{ font-weight:400; }
+
+/* Bloque de totales */
+.totalBlock{
+  background:var(--totalBg);
+  padding:15px;
+  border-radius:12px;
+  margin-top:10px;
+}
+.totalValues{
+  display:flex;
+  justify-content:space-around;
+  font-size:18px;
+}
+.totalValues div{text-align:center;}
+.totalValues .value{ font-size:22px; font-weight:700; }
+.totalValues .diff.negative{ color:var(--neg); }
+#diffPercent.negative { color: var(--neg); }
+
+/* Bloque de estadísticas */
+.statsBlock{
+  display:flex;
+  justify-content:center;
+  border-radius:12px;
+  margin:20px 0;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.subBlock{
+  border-radius:12px;
+  padding:20px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.statsBase{ flex:0 0 450px; background:var(--comp); }
+.statsDiff{ flex:0 0 300px; background:var(--diffColor); }
+.statsComp{ flex:0 0 450px; background:var(--base); }
+
+.statsValues{
+  display:flex;
+  justify-content:center;
+  font-size:16px;
+  gap:18px;
+  flex-wrap:wrap;
+}
+.statsValues div{text-align:center;}
+.statsValues .value{ font-size:18px; font-weight:700; }
+.statsDiff .value.negative{ color:var(--neg); }
+.statsDiff div:first-child{ color:black; font-weight:700; }
+
+.labelBase{ color:#f59e0b; font-weight:700; }
+.labelComp{ color:#38bdf8; font-weight:700; }
+
+/* GRID de gráficos */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(480px,1fr));
+  gap:20px;
+}
+.chart{ height:420px; }
+.card h2{ margin-top:0; margin-bottom:10px; }
+</style>
+</head>
+
+<body>
+
+<nav class="nav-menu">
+    <span style="color: #38bdf8; font-weight: bold; margin-right: 10px; opacity: 0.6;">DIGITAL:</span>
+    <a href="digital-datos-graficos.html">Datos</a>
+    <a href="digital-facturacion-desglosada.html">Desglose</a>
+    <a href="digital-display.html">Display</a>
+    <a href="digital-totales-familas-productos.html">Productos</a>
+    
+    <span style="color: #f59e0b; font-weight: bold; margin-left: 20px; margin-right: 10px; border-left: 1px solid #4b5563; padding-left: 20px;">PRINT:</span>
+    <a href="print-datos-graficos.html" class="active">Datos</a>
+    <a href="print-facturacion-desglosada.html">Desglose</a>
+    
+    <a href="index.html" style="margin-left: 20px; border-left: 1px solid #4b5563; padding-left: 20px; color: #fff; opacity: 0.5;">🏠 Inicio</a>
+</nav>
+
+<h1>PRINT - Facturación Publicidad</h1>
+
+<div class="container">
+
+  <div class="card">
+    <input type="file" id="fileInput" accept=".json,.xlsx">
+  </div>
+
+  <!-- BLOQUE REVISTA, PRODUCTO, SECTOR, COMERCIAL Y ÁREA -->
+  <div id="siteBlock" class="card filters" style="display:none">
+    <div class="filtersRow">
+      <div>
+        <label>Revista</label>
+        <select id="fSite" title="Filtra por revista/publicación"></select>
+      </div>
+      <div>
+        <label>Producto</label>
+        <select id="fProduct" title="Filtra por producto"></select>
+      </div>
+      <div>
+        <label>Sector</label>
+        <select id="fSector" title="Filtra por sector del anunciante"></select>
+      </div>
+      <div>
+        <label>Comercial</label>
+        <select id="fComercial" title="Filtra por comercial"></select>
+      </div>
+      <div>
+        <label>Área</label>
+        <select id="fArea" title="Filtra por área"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE AÑO Y MESES -->
+  <div id="filters" class="card filters" style="display:none">
+    <div class="filtersRow">
+      <div>
+        <label class="labelBase">Año base</label>
+        <select id="fYear"></select>
+        <div class="checkboxGroup" id="monthsBase"></div>
+      </div>
+      <div>
+        <label class="labelComp">Año comparación</label>
+        <select id="fYear2"></select>
+        <div class="checkboxGroup" id="monthsComp"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE TOTAL FACTURACIÓN -->
+  <div id="totalBlock" class="card filters" style="display:none">
+    <div class="totalBlock">
+      <div class="totalValues">
+        <div>
+          <div>Año base</div>
+          <div id="totalYear1" class="value">0 €</div>
+        </div>
+        <div>
+          <div>Año comparación</div>
+          <div id="totalYear2" class="value">0 €</div>
+        </div>
+        <div>
+          <div>% diferencia</div>
+          <div id="diffPercent" class="value">0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE ESTADÍSTICAS -->
+  <div id="statsBlock" class="card filters" style="display:none">
+    <div class="statsBlock">
+      <div class="subBlock statsBase">
+        <div class="statsValues">
+          <div>
+            <div>Fact. Año Base</div>
+            <div id="totalStatsBase" class="value">0 €</div>
+          </div>
+          <div>
+            <div>Nº líneas</div>
+            <div id="linesStatsBase" class="value">0</div>
+          </div>
+          <div>
+            <div>Presupuesto medio</div>
+            <div id="avgStatsBase" class="value">0 €</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subBlock statsDiff">
+        <div class="statsValues">
+          <div>
+            <div>% Crecimiento Presupuesto Medio</div>
+            <div id="diffAvgStats" class="value">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subBlock statsComp">
+        <div class="statsValues">
+          <div>
+            <div>Fact. Año Comparación</div>
+            <div id="totalStatsComp" class="value">0 €</div>
+          </div>
+          <div>
+            <div>Nº líneas</div>
+            <div id="linesStatsComp" class="value">0</div>
+          </div>
+          <div>
+            <div>Presupuesto medio</div>
+            <div id="avgStatsComp" class="value">0 €</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRID de gráficos -->
+  <div id="chartsGrid" class="grid" style="display:none">
+    <div class="card">
+      <h2>Área acumulada</h2>
+      <div id="chartArea" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Barras agrupadas</h2>
+      <div id="chartBar" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Líneas</h2>
+      <div id="chartLine" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Barras apiladas</h2>
+      <div id="chartStack" class="chart"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ==== Constantes y estado ==== */
+const MONTHS=[
+  "01 Enero","02 Febrero","03 Marzo","04 Abril","05 Mayo","06 Junio",
+  "07 Julio","08 Agosto","09 Septiembre","10 Octubre","11 Noviembre","12 Diciembre"
+];
+let rawData=[];
+
+/* CARGA AUTOMÁTICA PRINT */
+window.onload = async () => {
+    const status = document.getElementById('loadStatus');
+    try {
+        status.textContent = "Buscando Print.json...";
+        const response = await fetch('Print.json');
+        if (!response.ok) throw new Error();
+        
+        const lastMod = response.headers.get('Last-Modified');
+        let fechaTexto = lastMod ? new Date(lastMod).toLocaleDateString('es-ES', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}) : "No disponible";
+
+        const data = await response.json();
+        init(data);
+        
+        status.innerHTML = "✓ Datos de 'Print.json' cargados correctamente.<br>" + 
+                          "<span style='font-weight: bold;'>✓ Última actualización en servidor: " + fechaTexto + "</span>";
+    } catch (err) {
+        status.textContent = "Aviso: Selecciona un archivo para empezar.";
+    }
+};
+
+/* ==== Helpers de normalización ==== */
+// 🔧 Texto robusto: NBSP -> espacio, trim, colapsa espacios, quita tildes y pasa a MAYÚSCULAS
+function normalizeText(s){
+  if(s==null) return "";
+  return String(s)
+    .replace(/\u00A0/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .toUpperCase();
+}
+
+// 🔧 Mes al formato "NN Nombre" (si viene "01", "Enero", etc. puedes ampliar aquí si hace falta)
+function normalizeMonth(m){
+  if(!m) return "";
+  const s = String(m).replace(/\u00A0/g," ").trim();
+  const nn = s.substring(0,2);
+  return MONTHS.find(x=>x.startsWith(nn)) || "";
+}
+
+// 🔧 Número robusto para € con miles/coma
+function num(v){
+  if(v==null) return 0;
+  let s = String(v)
+    .replace(/\u00A0/g," ")
+    .replace(/€/g,"")
+    .replace(/\s/g,"")
+    .replace(/\./g,"");
+  s = s.replace(/,/g,".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/* ==== Formateo ==== */
+const supportsEsGrouping = (() => {
+  try { return new Intl.NumberFormat("es-ES").format(1000) === "1.000"; }
+  catch { return false; }
+})();
+function formatThousandsManualInt(n){
+  const s = Math.round(Number(n) || 0).toString();
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+function formatInt(n){
+  const num = Math.round(Number(n) || 0);
+  if (supportsEsGrouping) {
+    return num.toLocaleString("es-ES", { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+  }
+  return formatThousandsManualInt(num);
+}
+function formatCurrency(n){
+  const num = Math.round(Number(n) || 0);
+  let formatted;
+  if (supportsEsGrouping) {
+    formatted = num.toLocaleString("es-ES", {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+  } else {
+    formatted = formatThousandsManualInt(num) + " €";
+  }
+  // quita espacio y NBSP antes de €
+  formatted = formatted.replace(/\u00A0/g, " ").replace(/\s*€/, "€");
+  return formatted;
+}
+
+/* ==== Carga de archivo ==== */
+fileInput.onchange=e=>{
+  const f=e.target.files[0];
+  if(!f) return;
+  const ext=f.name.split(".").pop().toLowerCase();
+  const r=new FileReader();
+  r.onload=ev=>{
+    if(ext==="json") init(JSON.parse(ev.target.result));
+    else{
+      const wb=XLSX.read(ev.target.result,{type:"binary"});
+      init(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
+    }
+  };
+  ext==="json"?r.readAsText(f):r.readAsBinaryString(f);
+};
+
+/* ==== Inicialización de filtros y UI ==== */
+function init(data){
+  // 🔧 Normalizamos todas las dimensiones de texto
+  rawData=data.map(d=>({
+    ingreso: num(d["Imp.Neto a Comisionar"]),
+    Año: normalizeText(d["Año inserción"]),
+    Mes: normalizeMonth(d["Mes inserción"]),
+    Site: normalizeText(d["Publicación"]),
+    Product: normalizeText(d["Producto"]),
+    Sector: normalizeText(d["Sector del anunciante"]),   // ojo a nombre exacto de columna
+    Comercial: normalizeText(d["Comercial"]),
+    Area: normalizeText(d["ÁREA"])
+  }));
+
+  const years=[...new Set(rawData.map(d=>d.Año).filter(Boolean))].sort((a,b)=>b.localeCompare(a,"es"));
+  const sites=[...new Set(rawData.map(d=>d.Site).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const products=[...new Set(rawData.map(d=>d.Product).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const sectors=[...new Set(rawData.map(d=>d.Sector).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const commercials=[...new Set(rawData.map(d=>d.Comercial).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+  const areas=[...new Set(rawData.map(d=>d.Area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es"));
+
+  fSite.innerHTML="<option>Todos</option>"+sites.map(s=>`<option>${s}</option>`).join("");
+  fProduct.innerHTML="<option>Todos</option>"+products.map(p=>`<option>${p}</option>`).join("");
+  fSector.innerHTML="<option>Todos</option>"+sectors.map(s=>`<option>${s}</option>`).join("");
+  fYear.innerHTML = "<option>Todos</option>" + years.map(y=>`<option>${y}</option>`).join("");
+  fYear2.innerHTML="<option>Sin comparar</option>"+years.map(y=>`<option>${y}</option>`).join("");
+  fComercial.innerHTML="<option>Todos</option>"+commercials.map(c=>`<option>${c}</option>`).join("");
+  fArea.innerHTML="<option>Todos</option>"+areas.map(a=>`<option>${a}</option>`).join("");
+
+  const monthsBaseDiv=document.getElementById("monthsBase");
+  const monthsCompDiv=document.getElementById("monthsComp");
+  monthsBaseDiv.innerHTML=MONTHS.map(m=>`<label><input type="checkbox" value="${m}" onchange="render()"> ${m.slice(3)}</label>`).join("");
+  monthsCompDiv.innerHTML=MONTHS.map(m=>`<label><input type="checkbox" value="${m}" onchange="render()"> ${m.slice(3)}</label>`).join("");
+
+  [fSite,fProduct,fSector,fYear,fYear2,fComercial,fArea].forEach(e=>e.onchange=render);
+
+  siteBlock.style.display="block";
+  filters.style.display="block";
+  totalBlock.style.display="block";
+  statsBlock.style.display="flex";
+  chartsGrid.style.display="grid";
+
+  render();
+}
+
+/* ==== Filtrado y agregaciones ==== */
+function getSelectedMonths(containerId){
+  const checkboxes=document.getElementById(containerId).querySelectorAll("input[type=checkbox]:checked");
+  return Array.from(checkboxes).map(c=>c.value);
+}
+
+function filterData(year,site,product,sector,commercial,area,monthsSelected){
+  if(monthsSelected.length===0) monthsSelected = MONTHS.slice();
+  // 🔧 normalizamos también los valores elegidos en filtros
+  const y = normalizeText(year);
+  const s = normalizeText(site);
+  const p = normalizeText(product);
+  const sec = normalizeText(sector);
+  const c = normalizeText(commercial);
+  const a = normalizeText(area);
+
+  return rawData.filter(d=>
+    (y==="TODOS" || d.Año===y) &&
+    (s==="TODOS" || d.Site===s) &&
+    (p==="TODOS" || d.Product===p) &&
+    (sec==="TODOS" || d.Sector===sec) &&
+    (c==="TODOS" || d.Comercial===c) &&
+    (a==="TODOS" || d.Area===a) &&
+    monthsSelected.includes(d.Mes)
+  );
+}
+
+function countPositive(data){ return data.filter(d=>d.ingreso>0).length; }
+function sumData(data){ return data.reduce((a,b)=>a+b.ingreso,0); }
+function average(data){ const count=countPositive(data); return count?Math.round(sumData(data)/count):0; }
+
+function monthlySeries(data){
+  const map={};
+  MONTHS.forEach(m=>map[m]=0);
+  data.forEach(d=>{ if(d.Mes) map[d.Mes]+=d.ingreso; });
+  return MONTHS.map(m=>Math.round(map[m]));
+}
+
+/* ==== Plotly base layout ==== */
+function baseLayout(){
+  return {
+    paper_bgcolor:"rgba(0,0,0,0)",
+    plot_bgcolor:"rgba(0,0,0,0)",
+    font:{color:"#e5e7eb"},
+    legend:{orientation:"h",y:-0.25},
+    margin:{t:20,l:60,r:30,b:60},
+    xaxis:{title:"Mes"},
+    yaxis:{title:"Facturación (€)"},
+    separators: ".,",
+    hoverlabel:{ bgcolor:"#1f2937", bordercolor:"#374151" }
+  };
+}
+function varColor(i){ return i===1?"#38bdf8":"#f59e0b"; }
+
+/* ==== Render principal ==== */
+function render(){
+  const site=fSite.value;
+  const product=fProduct.value;
+  const sector=fSector.value;
+  const y1=fYear.value;
+  const y2=fYear2.value;
+  const com=fComercial.value;
+  const area=fArea.value;
+
+  const monthsBase=getSelectedMonths("monthsBase");
+  const monthsComp=getSelectedMonths("monthsComp");
+
+  const dataY1=filterData(y1,site,product,sector,com,area,monthsBase);
+  const dataY2=y2!=="Sin comparar"?filterData(y2,site,product,sector,com,area,monthsComp):[];
+
+  const total1=sumData(dataY1);
+  const total2=y2!=="Sin comparar"?sumData(dataY2):0;
+
+  totalYear1.textContent=formatCurrency(total1);
+  totalYear2.textContent=y2!=="Sin comparar"?formatCurrency(total2):"-";
+
+  const diffTotal = (y2!=="Sin comparar" && total2) ? Math.round(((total1/total2)-1)*100) : 0;
+  diffPercent.textContent=y2!=="Sin comparar"?diffTotal+"%":"-";
+  diffPercent.className="value"+(diffTotal<0?" negative":"");
+
+  const linesBase=countPositive(dataY1);
+  const avgBase=average(dataY1);
+  totalStatsBase.textContent=formatCurrency(total1);
+  linesStatsBase.textContent=formatInt(linesBase);
+  avgStatsBase.textContent=formatCurrency(avgBase);
+
+  const linesComp=countPositive(dataY2);
+  const avgComp=average(dataY2);
+  totalStatsComp.textContent=y2!=="Sin comparar"?formatCurrency(total2):"-";
+  linesStatsComp.textContent=y2!=="Sin comparar"?formatInt(linesComp):"-";
+  avgStatsComp.textContent=y2!=="Sin comparar"?formatCurrency(avgComp):"-";
+
+  const diffAvg = avgComp ? Math.round(((avgBase/avgComp)-1)*100) : 0;
+  diffAvgStats.textContent = y2!=="Sin comparar" ? diffAvg + "%" : "-";
+  diffAvgStats.className = "value" + (diffAvg<0 ? " negative" : "");
+
+  const v1=monthlySeries(dataY1);
+  const v2=y2!=="Sin comparar"?monthlySeries(dataY2):null;
+
+  Plotly.newPlot("chartLine",[
+    {
+      x:MONTHS, y:v1, type:"scatter", mode:"lines+markers", name:y1,
+      line:{ color:varColor(1) },
+      hovertemplate: "%{y:,.0f}€<extra>"+y1+"</extra>"
+    },
+    ...(v2 ? [{
+      x:MONTHS, y:v2, type:"scatter", mode:"lines+markers", name:y2,
+      line:{ color:varColor(2) },
+      hovertemplate: "%{y:,.0f}€<extra>"+y2+"</extra>"
+    }] : [])
+  ], baseLayout());
+
+  Plotly.newPlot("chartBar",[
+    { x:MONTHS, y:v1, type:"bar", name:y1, marker:{ color:varColor(1) }, hovertemplate: "%{y:,.0f}€<extra>"+y1+"</extra>" },
+    ...(v2 ? [{ x:MONTHS, y:v2, type:"bar", name:y2, marker:{ color:varColor(2) }, hovertemplate: "%{y:,.0f}€<extra>"+y2+"</extra>" }] : [])
+  ], { ...baseLayout(), barmode:"group" });
+
+  Plotly.newPlot("chartArea",[
+    { x:MONTHS, y:v1, type:"scatter", fill:"tozeroy", name:y1, line:{ color:varColor(1) }, hovertemplate: "%{y:,.0f}€<extra>"+y1+"</extra>" },
+    ...(v2 ? [{ x:MONTHS, y:v2, type:"scatter", fill:"tozeroy", name:y2, line:{ color:varColor(2) }, hovertemplate: "%{y:,.0f}€<extra>"+y2+"</extra>" }] : [])
+  ], baseLayout());
+
+  Plotly.newPlot("chartStack",[
+    { x:MONTHS, y:v1, type:"bar", name:y1, marker:{ color:varColor(1) }, hovertemplate: "%{y:,.0f}€<extra>"+y1+"</extra>" },
+    ...(v2 ? [{ x:MONTHS, y:v2, type:"bar", name:y2, marker:{ color:varColor(2) }, hovertemplate: "%{y:,.0f}€<extra>"+y2+"</extra>" }] : [])
+  ], { ...baseLayout(), barmode:"stack" });
+}
+</script>
+</body>
+</html>
