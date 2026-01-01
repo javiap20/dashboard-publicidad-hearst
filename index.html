@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DIGITAL - Facturación Display</title>
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --card:#111827;
+  --text:#e5e7eb;
+  --base:#38bdf8;          /* azul para año base */
+  --comp:#f59e0b;          /* amarillo para año comparación */
+  --neg:#f87171;           /* rojo */
+  --diffColor:#6ee7b7;     /* verde claro para bloque % */
+  --totalBg:#1e40af;       /* fondo totales */
+
+  /* Colores de fondos de filtros */
+  --siteBg:#fef3c7;        /* Site: crema */
+  --productoBg:#dbeafe;    /* Familia: azul clarito */
+  --sectorBg:#fbcfe8;      /* Sector: rosa */
+  --comercialBg:#d1fae5;   /* Comercial: verde menta */
+  --areaBg:#fcd5ce;        /* Área: coral claro */
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,Arial,sans-serif;
+  background:linear-gradient(180deg,#020617,#0f172a);
+  color:var(--text);
+}
+h1{ text-align:center; margin:20px 0; }
+.container{ max-width:1500px; margin:auto; padding:20px; }
+.card{
+  background:rgba(17,24,39,.9);
+  border-radius:14px;
+  padding:18px;
+  margin-bottom:20px;
+}
+
+/* Controles */
+.filters select,input[type=file]{
+  background:#1f2933;
+  color:var(--text);
+  border:1px solid #1f2937;
+  padding:8px 10px;
+  border-radius:8px;
+  margin-right:14px;
+}
+.filters label{ font-weight:600; margin-right:6px; display:block; margin-top:10px; }
+
+.filtersRow{
+  display:flex;
+  gap:20px;
+  flex-wrap:wrap;
+  align-items:flex-start;
+}
+.filtersRow div select{
+  width:240px;
+  font-weight:600;
+}
+
+/* Colores específicos por filtro */
+#fSite{     background:var(--siteBg);     color:#111; }
+#fProduct{  background:var(--productoBg); color:#111; }
+#fSector{   background:var(--sectorBg);   color:#111; }
+#fComercial{background:var(--comercialBg);color:#111; }
+#fArea{     background:var(--areaBg);     color:#111; }
+
+.checkboxGroup{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:5px;
+}
+.checkboxGroup label{ font-weight:400; }
+
+/* Bloques superiores */
+.totalBlock{
+  background:var(--totalBg);
+  padding:15px;
+  border-radius:12px;
+  margin-top:10px;
+}
+.totalValues{
+  display:flex;
+  justify-content:space-around;
+  font-size:18px;
+}
+.totalValues div{text-align:center;}
+.totalValues .value{ font-size:22px; font-weight:700; }
+#diffPercent.negative { color: var(--neg); }
+
+.statsBlock{
+  display:flex;
+  justify-content:center;
+  border-radius:12px;
+  margin:20px 0;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.subBlock{
+  border-radius:12px;
+  padding:20px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.statsBase{ flex:0 0 450px; background:var(--comp); }
+.statsDiff{ flex:0 0 300px; background:var(--diffColor); }
+.statsComp{ flex:0 0 450px; background:var(--base); }
+
+.statsValues{
+  display:flex;
+  justify-content:center;
+  font-size:16px;
+  gap:18px;
+  flex-wrap:wrap;
+}
+.statsValues div{text-align:center;}
+.statsValues .value{ font-size:18px; font-weight:700; }
+.statsDiff .value.negative{ color:var(--neg); }
+.statsDiff div:first-child{ color:black; font-weight:700; }
+
+/* Tarjeta del gráfico */
+.chart-card h2{ margin-top:0; margin-bottom:10px; }
+#chartProductsBars{ width:100%; }
+
+/* Aviso */
+.notice{
+  padding:14px 16px;
+  background:#1f2937;
+  border:1px dashed #374151;
+  border-radius:10px;
+  color:#cbd5e1;
+  margin-top:6px;
+}
+</style>
+</head>
+
+<body>
+<h1>DIGITAL - Facturación Display</h1>
+
+<div class="container">
+
+  <div class="card">
+    <label>Cargar datos manualmente: </label>
+    <input type="file" id="fileInput" accept=".json,.xlsx">
+    <p id="loadStatus" style="font-size: 0.8em; color: #6ee7b7; margin-top: 10px;"></p>
+  </div>
+
+  <div id="siteBlock" class="card filters" style="display:none">
+    <div class="filtersRow">
+      <div>
+        <label>Site</label>
+        <select id="fSite" title="Filtra por publicación"></select>
+      </div>
+      <div>
+        <label>Familia Display</label>
+        <select id="fProduct" title="Elige una familia"></select>
+      </div>
+      <div>
+        <label>Sector</label>
+        <select id="fSector" title="Filtra por sector"></select>
+      </div>
+      <div>
+        <label>Comercial</label>
+        <select id="fComercial" title="Filtra por comercial"></select>
+      </div>
+      <div>
+        <label>Área</label>
+        <select id="fArea" title="Filtra por área"></select>
+      </div>
+    </div>
+  </div>
+
+  <div id="filters" class="card filters" style="display:none">
+    <div class="filtersRow">
+      <div>
+        <label class="labelBase">Año base</label>
+        <select id="fYear"></select>
+        <div class="checkboxGroup" id="monthsBase"></div>
+      </div>
+      <div>
+        <label class="labelComp">Año comparación</label>
+        <select id="fYear2"></select>
+        <div class="checkboxGroup" id="monthsComp"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="totalBlock" class="card filters" style="display:none">
+    <div class="totalBlock">
+      <div class="totalValues">
+        <div>
+          <div>Año base</div>
+          <div id="totalYear1" class="value">0 €</div>
+        </div>
+        <div>
+          <div>Año comparación</div>
+          <div id="totalYear2" class="value">-</div>
+        </div>
+        <div>
+          <div>% diferencia</div>
+          <div id="diffPercent" class="value">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="statsBlock" class="card filters" style="display:none">
+    <div class="statsBlock">
+      <div class="subBlock statsBase">
+        <div class="statsValues">
+          <div>
+            <div>Fact. Año Base</div>
+            <div id="totalStatsBase" class="value">0 €</div>
+          </div>
+          <div>
+            <div>Nº líneas</div>
+            <div id="linesStatsBase" class="value">0</div>
+          </div>
+          <div>
+            <div>Presupuesto medio</div>
+            <div id="avgStatsBase" class="value">0 €</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subBlock statsDiff">
+        <div class="statsValues">
+          <div>
+            <div>% Crecimiento Presupuesto Medio</div>
+            <div id="diffAvgStats" class="value">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subBlock statsComp">
+        <div class="statsValues">
+          <div>
+            <div>Fact. Año Comparación</div>
+            <div id="totalStatsComp" class="value">-</div>
+          </div>
+          <div>
+            <div>Nº líneas</div>
+            <div id="linesStatsComp" class="value">-</div>
+          </div>
+          <div>
+            <div>Presupuesto medio</div>
+            <div id="avgStatsComp" class="value">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="chartCardBars" class="card chart-card" style="display:none">
+    <h2>Ingresos por Producto (total periodo seleccionado)</h2>
+    <div id="chartProductsBars"></div>
+    <div id="msgTodos" class="notice" style="display:none">
+      Elige una <b>Familia Display</b> para ver sus productos.
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ==== Constantes y estado ==== */
+const MONTHS=["01 Enero","02 Febrero","03 Marzo","04 Abril","05 Mayo","06 Junio","07 Julio","08 Agosto","09 Septiembre","10 Octubre","11 Noviembre","12 Diciembre"];
+let rawData=[];
+
+const FAMILIAS_DISPLAY = [
+  "Display", "Programatica Display Directo", "Programatica Display Indirecto",
+  "Video", "Video Programatico Directo", "Video Programatico Indirecto"
+];
+
+/* CARGA AUTOMÁTICA AL INICIAR */
+window.onload = async () => {
+    const status = document.getElementById('loadStatus');
+    try {
+        status.textContent = "Intentando cargar Digital.json automáticamente...";
+        const response = await fetch('Digital.json');
+        if (!response.ok) throw new Error("No se encontró el archivo");
+        const data = await response.json();
+        init(data);
+        status.textContent = "✓ Datos de 'Digital.json' cargados correctamente.";
+    } catch (err) {
+        status.textContent = "Aviso: No se cargó Digital.json automáticamente. Selecciona un archivo manual.";
+        console.log("Carga automática omitida:", err.message);
+    }
+};
+
+/* ==== Helpers ==== */
+function normalizeText(s){
+  if(s==null) return "";
+  return String(s).replace(/\u00A0/g, " ").trim().replace(/\s+/g, " ").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
+}
+function labelClean(s){ return String(s??"").replace(/\u00A0/g," ").trim(); }
+function normalizeMonth(m){
+  if(!m) return "";
+  const s = String(m).replace(/\u00A0/g," ").trim();
+  const n = s.substring(0,2);
+  return MONTHS.find(x=>x.startsWith(n)) || "";
+}
+function num(v){
+  if(v==null) return 0;
+  let s = String(v).replace(/\u00A0/g," ").replace(/€/g,"").replace(/\s/g,"").replace(/\./g,"").replace(/,/g,".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/* ==== Formateo ==== */
+const supportsEsGrouping = (()=>{ try{ return new Intl.NumberFormat("es-ES").format(1000)==="1.000"; }catch{ return false; } })();
+function formatThousandsManualInt(n){
+  return Math.round(Number(n)||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,".");
+}
+function formatInt(n){
+  if(supportsEsGrouping) return Math.round(Number(n)||0).toLocaleString("es-ES");
+  return formatThousandsManualInt(n);
+}
+function formatCurrency(n){
+  const numVal = Math.round(Number(n)||0);
+  let f = supportsEsGrouping ? numVal.toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}) : formatThousandsManualInt(numVal) + " €";
+  return f.replace(/\u00A0/g," ").replace(/\s*€/,"€");
+}
+
+/* ==== Carga de archivo manual ==== */
+fileInput.onchange=e=>{
+  const f=e.target.files[0];
+  if(!f) return;
+  const ext=f.name.split(".").pop().toLowerCase();
+  const r=new FileReader();
+  r.onload=ev=>{
+    if(ext==="json") init(JSON.parse(ev.target.result));
+    else{
+      const wb=XLSX.read(ev.target.result,{type:"binary"});
+      init(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
+    }
+  };
+  ext==="json"?r.readAsText(f):r.readAsBinaryString(f);
+};
+
+function init(data){
+  rawData=data.map(d=>({
+    ingreso: num(d["Imp.Neto a Comisionar"]),
+    Año: normalizeText(d["Año inserción"]),
+    Mes: normalizeMonth(d["Mes inserción"]),
+    Site: normalizeText(d["Publicación"]),
+    Familia: normalizeText(d["Familia"]),
+    Producto: normalizeText(d["Producto"]),
+    ProductoLabel: labelClean(d["Producto"]),
+    Sector: normalizeText(d["Sector"]),
+    Comercial: normalizeText(d["Comercial"]),
+    Area: normalizeText(d["ÁREAS"])
+  }));
+
+  const years=[...new Set(rawData.map(d=>d.Año).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+  const sites=[...new Set(rawData.map(d=>d.Site).filter(Boolean))].sort();
+  const sectors=[...new Set(rawData.map(d=>d.Sector).filter(Boolean))].sort();
+  const commercials=[...new Set(rawData.map(d=>d.Comercial).filter(Boolean))].sort();
+  const areas=[...new Set(rawData.map(d=>d.Area).filter(Boolean))].sort();
+
+  fSite.innerHTML="<option>Todos</option>"+sites.map(s=>`<option>${s}</option>`).join("");
+  fProduct.innerHTML="<option>Todos</option>"+FAMILIAS_DISPLAY.map(p=>`<option>${p}</option>`).join("");
+  fSector.innerHTML="<option>Todos</option>"+sectors.map(s=>`<option>${s}</option>`).join("");
+  fYear.innerHTML="<option>Todos</option>"+years.map(y=>`<option>${y}</option>`).join("");
+  fYear2.innerHTML="<option>Sin comparar</option>"+years.map(y=>`<option>${y}</option>`).join("");
+  fComercial.innerHTML="<option>Todos</option>"+commercials.map(c=>`<option>${c}</option>`).join("");
+  fArea.innerHTML="<option>Todos</option>"+areas.map(a=>`<option>${a}</option>`).join("");
+
+  document.getElementById("monthsBase").innerHTML=MONTHS.map((m)=>`<label><input type="checkbox" value="${m}" onchange="render()"> ${m.slice(3)}</label>`).join("");
+  document.getElementById("monthsComp").innerHTML=MONTHS.map((m)=>`<label><input type="checkbox" value="${m}" onchange="render()"> ${m.slice(3)}</label>`).join("");
+
+  [fSite,fProduct,fSector,fYear,fYear2,fComercial,fArea].forEach(e=>e.onchange=render);
+
+  siteBlock.style.display="block";
+  filters.style.display="block";
+  totalBlock.style.display="block";
+  statsBlock.style.display="flex";
+  chartCardBars.style.display="block";
+  render();
+}
+
+function getSelectedMonths(id){
+  const sel=Array.from(document.getElementById(id).querySelectorAll("input:checked")).map(c=>c.value);
+  return sel.length ? sel : MONTHS;
+}
+
+function filterData(year,site,familia,sector,com,area,months){
+  const [y,s,f,sec,c,a]=[year,site,familia,sector,com,area].map(normalizeText);
+  return rawData.filter(d=>
+    (y==="TODOS" || d.Año===y) && (s==="TODOS" || d.Site===s) && (f==="TODOS" || d.Familia===f) &&
+    (sec==="TODOS" || d.Sector===sec) && (c==="TODOS" || d.Comercial===c) && (a==="TODOS" || d.Area===a) &&
+    months.includes(d.Mes)
+  );
+}
+
+function sumData(data){ return data.reduce((a,b)=>a+b.ingreso,0); }
+function countPositive(data){ return data.filter(d=>d.ingreso>0).length; }
+function average(data){ const n=countPositive(data); return n?Math.round(sumData(data)/n):0; }
+
+function totalsByProduct(data){
+  const map = new Map();
+  data.forEach(d=>{
+    const lbl = d.ProductoLabel || "(Sin producto)";
+    map.set(lbl, (map.get(lbl)||0) + d.ingreso);
+  });
+  return Array.from(map.entries()).sort((a,b)=>b[1]-a[1]);
+}
+
+function render(){
+  const site=fSite.value, fam=fProduct.value, sec=fSector.value, y1=fYear.value, y2=fYear2.value, com=fComercial.value, area=fArea.value;
+  const m1=getSelectedMonths("monthsBase"), m2=getSelectedMonths("monthsComp");
+
+  const dataY1=filterData(y1,site,fam,sec,com,area,m1);
+  const dataY2=(y2!=="Sin comparar")?filterData(y2,site,fam,sec,com,area,m2):[];
+
+  const t1=sumData(dataY1), t2=sumData(dataY2);
+  totalYear1.textContent=formatCurrency(t1);
+  totalYear2.textContent=(y2!=="Sin comparar")?formatCurrency(t2):"-";
+
+  const dTot=(y2!=="Sin comparar" && t2)?Math.round(((t1/t2)-1)*100):0;
+  diffPercent.textContent=(y2!=="Sin comparar")?dTot+"%":"-";
+  diffPercent.className="value"+(dTot<0?" negative":"");
+
+  const l1=countPositive(dataY1), a1=average(dataY1);
+  totalStatsBase.textContent=formatCurrency(t1);
+  linesStatsBase.textContent=formatInt(l1);
+  avgStatsBase.textContent=formatCurrency(a1);
+
+  const l2=countPositive(dataY2), a2=average(dataY2);
+  totalStatsComp.textContent=(y2!=="Sin comparar")?formatCurrency(t2):"-";
+  linesStatsComp.textContent=(y2!=="Sin comparar")?formatInt(l2):"-";
+  avgStatsComp.textContent=(y2!=="Sin comparar")?formatCurrency(a2):"-";
+
+  const dAvg=(y2!=="Sin comparar" && a2)?Math.round(((a1/a2)-1)*100):0;
+  diffAvgStats.textContent=(y2!=="Sin comparar")?dAvg+"%":"-";
+  diffAvgStats.className="value"+(dAvg<0?" negative":"");
+
+  renderBars({fam, y1, y2, m1, m2, site, sec, com, area});
+}
+
+function renderBars(ctx){
+  const showMsg=(normalizeText(ctx.fam)==="TODOS");
+  document.getElementById("msgTodos").style.display=showMsg?"block":"none";
+  const div=document.getElementById("chartProductsBars");
+  if(showMsg){ Plotly.purge(div); return; }
+
+  const b=filterData(ctx.y1,ctx.site,ctx.fam,ctx.sec,ctx.com,ctx.area,ctx.m1);
+  const c=(ctx.y2!=="Sin comparar")?filterData(ctx.y2,ctx.site,ctx.fam,ctx.sec,ctx.com,ctx.area,ctx.m2):[];
+
+  const tB=new Map(totalsByProduct(b)), tC=new Map(totalsByProduct(c));
+  let labs=Array.from(new Set([...tB.keys(),...tC.keys()])).sort((a,b)=>(tB.get(a)||0)-(tB.get(b)||0)).slice(0,30);
+
+  const xB=labs.map(l=>Math.round(tB.get(l)||0)), xC=labs.map(l=>Math.round(tC.get(l)||0));
+  const pcts=labs.map((l,i)=> (ctx.y2!=="Sin comparar" && xC[i]>0)? Math.round(((xB[i]/xC[i])-1)*100)+"%" : "");
+
+  div.style.height=(60+28*labs.length)+"px";
+  const traces=[{
+    type:"bar", orientation:"h", y:labs, x:xB, name:ctx.y1, marker:{color:"#38bdf8"},
+    text:pcts, textposition:"outside", hovertemplate:"%{y}<br>%{x:,.0f}€<extra></extra>"
+  }];
+  if(ctx.y2!=="Sin comparar") traces.push({
+    type:"bar", orientation:"h", y:labs, x:xC, name:ctx.y2, marker:{color:"#f59e0b"},
+    hovertemplate:"%{y}<br>%{x:,.0f}€<extra></extra>"
+  });
+
+  Plotly.newPlot(div, traces, {
+    paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)", font:{color:"#e5e7eb"},
+    margin:{t:20,l:180,r:100,b:40}, barmode:ctx.y2!=="Sin comparar"?"group":"relative",
+    xaxis:{title:"Ingresos (€)"}, yaxis:{automargin:true}
+  }, {responsive:true});
+}
+</script>
+</body>
+</html>
